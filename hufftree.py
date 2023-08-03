@@ -1,5 +1,5 @@
-from typing import Tuple
 import math
+Node = tuple[tuple[str, int], tuple[str, int], tuple[str, int]]
 
 class HuffmanTree():
     def __init__(self) -> None:
@@ -15,7 +15,7 @@ class HuffmanTree():
             self.freq_dist[symbol] = self.freq_dist.get(symbol, 0) + 1
         return self.freq_dist
     
-    def make_tree(self, probabilities):
+    def make_tree(self, probabilities: dict):
         self.paths = {}
         remaining = [((s,p),) for s,p in probabilities.items()]
         while len(remaining)>1:
@@ -25,18 +25,21 @@ class HuffmanTree():
             new_node = self.merge_nodes(first, second)
             remaining.append(new_node)
         self.tree=remaining.pop(0)
-        self.caculate_paths(self.tree)
         return self.paths
     
-    def merge_nodes(self, node_a, node_b):
+    def merge_nodes(self, node_a: Node , node_b: Node):
+        for s in node_a[0][0]:
+            self.paths[s]="0"+self.paths.get(s, "")
+        for s in node_b[0][0]:
+            self.paths[s]="1"+self.paths.get(s, "")
         return (tuple(a+b for a,b in zip(node_a[0], node_b[0])), node_a, node_b)
 
-    def caculate_paths(self, tree, current_path=""):
+    def calculate_paths(self, tree, current_path=""):
         for i, node in enumerate(tree[1:]):
             if len(node)==1:
                 self.paths[node[0][0]] = current_path + str(i)
             else:
-                self.caculate_paths(node, current_path + str(i))
+                self.calculate_paths(node, current_path + str(i))
     
     def encode(self, sequence: str) -> str:
         self.sequence = sequence
@@ -52,9 +55,9 @@ class HuffmanTree():
         self.paths[sorted_paths[0][0]] = canon_path
         for symbol, path in sorted_paths[1:]:
             canon_path = format(int(canon_path, 2) + 1 , 'b').rjust(
-                len(canon_path),"0"
+                len(canon_path),"0"  # fill back 0s on the left lost in int conversion
             ).ljust(
-                len(path),"0"
+                len(path),"0" # fill 0s on the right according to bit length required
             )
             self.paths[symbol] = canon_path
 
@@ -76,18 +79,20 @@ class HuffmanTree():
             )
         ])
     
-    def decompress_tree(self, ct):
+    def recover_treeinfo_from_binary(self, ct):
         self.num_bins=int(ct[:7], 2)
         ct = ct[7:]
-        bit_nums=[int(ct[i:i+7], 2) for i in range(0,self.num_bins*7,7)]
+        bit_nums=[int(ct[i:i+7], 2) for i in range(0, self.num_bins*7, 7)]
         ct = ct[self.num_bins*7:]
         self.num_symbols = int(ct[:7], 2)
         ct = ct[7:]
-        symbols = [chr(int(ct[i:i+7], 2)) for i in range(0,self.num_symbols*7,7)]
+        symbolstack = [chr(int(ct[i:i+7], 2)) for i in range(0, self.num_symbols*7, 7)]
         ct=None
-        self.old_paths = self.paths
+        return bit_nums, symbolstack
+    
+    def decompress_tree(self, ct):
+        bit_nums, symbolstack = self.recover_treeinfo_from_binary(ct)
         self.paths = {}
-        symbolstack = symbols.copy()
         path = 0
         for i, nums in enumerate(bit_nums):
             code_len = i+1
@@ -96,7 +101,11 @@ class HuffmanTree():
                 if path == 0:
                     path = "0"*code_len
                 else:                    
-                    path = format(int(path, 2) + 1 , 'b').rjust(len(path),"0").ljust(code_len,"0")
+                    path = format(int(path, 2) + 1 , 'b').rjust(
+                        len(path), "0" # fill back 0s on the left lost in int conversion
+                    ).ljust(
+                        code_len, "0" # fill 0s on the right according to bit length required
+                    )
 
                 self.paths[symbol] = path
 
@@ -111,6 +120,8 @@ class HuffmanTree():
                 code=""
             except KeyError:
                 continue
+        self.sequence = string
+        self.probabilities = self.get_frequencies(self.sequence)
         return string
 
     def compress(self, sequence: str) -> str:
@@ -140,9 +151,9 @@ def calculate_entropy(sequence, freq_dist):
                 (freq_dist[s] / len_seq) * math.log((freq_dist[s] / len_seq), 2) * -1
                 for s in sequence
             ]
-        ) 
-    
-if __name__=="__main__":
+        )
+
+def test_hufftree():
     string = """
 Lorem ipsum dolor sit amet, consectetur adipiscing elit. Fusce rutrum at velit quis sodales. Sed scelerisque sit amet ex at mattis. Cras vestibulum ultricies massa eget pulvinar. Aliquam pharetra eget sem eget sodales. Cras dapibus turpis ante, a aliquet orci porttitor et. Fusce posuere urna ante, non maximus nulla sollicitudin et. Donec faucibus urna vel metus tincidunt lobortis. Donec maximus risus diam, at venenatis eros posuere eget. Vivamus ac ante viverra, sollicitudin elit ut, blandit enim. Fusce cursus ligula vel nisl elementum, a ullamcorper mauris placerat. Cras ornare egestas justo, eu imperdiet risus consequat a. Sed sagittis lectus vel lectus ultricies, eu lobortis quam accumsan. Phasellus euismod, neque eu viverra tempus, ligula dolor ultricies nisl, ac lobortis enim massa in felis. Proin laoreet hendrerit erat ut posuere.
 
@@ -160,12 +171,17 @@ Curabitur finibus nisl nec auctor dignissim. Maecenas iaculis nisl felis, nec la
     ht = HuffmanTree()
     compressed = ht.compress(string)
     old_paths = ht.paths
-    print(old_paths)
+
     print(f"compressed length: {len(compressed)}")
-    decompressed = ht.decompress(compressed)
-    assert old_paths==ht.paths
-    print(decompressed)
-    assert string==decompressed
     print("longest path length:", max([len(e) for e in ht.paths.values()]))
     print(f"weighted path length:{ht.get_weighted_pathlength():.4f}")
     print(f"shannon entropy: {calculate_entropy(string, ht.freq_dist):.4f}")
+    ## reset the object
+    ht = HuffmanTree()
+    decompressed = ht.decompress(compressed)
+    assert old_paths==ht.paths
+    # print(decompressed)
+    assert string==decompressed
+
+if __name__=="__main__":
+    test_hufftree()
