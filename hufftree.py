@@ -54,10 +54,11 @@ class HuffmanTree():
         canon_path = len(sorted_paths[0][1]) * "0"
         self.paths[sorted_paths[0][0]] = canon_path
         for symbol, path in sorted_paths[1:]:
+            # add one to previous code
             canon_path = format(int(canon_path, 2) + 1 , 'b').rjust(
-                len(canon_path),"0"  # fill back 0s on the left lost in int conversion
+                len(canon_path), "0"  # fill back 0s on the left lost in int conversion
             ).ljust(
-                len(path),"0" # fill 0s on the right according to bit length required
+                len(path), "0" # fill 0s on the right according to bit length required
             )
             self.paths[symbol] = canon_path
 
@@ -140,7 +141,7 @@ class HuffmanTree():
         return sum(
             [
                 len(self.paths[s]) * (self.freq_dist[s] / len_seq) 
-                for s in self.sequence
+                for s in set(self.sequence)
             ]
         )
 
@@ -149,7 +150,7 @@ def calculate_entropy(sequence, freq_dist):
     return sum(
             [
                 (freq_dist[s] / len_seq) * math.log((freq_dist[s] / len_seq), 2) * -1
-                for s in sequence
+                for s in set(sequence)
             ]
         )
 
@@ -173,14 +174,13 @@ Curabitur finibus nisl nec auctor dignissim. Maecenas iaculis nisl felis, nec la
     old_paths = ht.paths
 
     print(f"compressed length: {len(compressed)}")
-    print("longest path length:", max([len(e) for e in ht.paths.values()]))
-    print(f"weighted path length:{ht.get_weighted_pathlength():.4f}")
+    print(f"longest path length: {max([len(e) for e in ht.paths.values()])}")
+    print(f"weighted path length: {ht.get_weighted_pathlength():.4f}")
     print(f"shannon entropy: {calculate_entropy(string, ht.freq_dist):.4f}")
     ## reset the object
     ht = HuffmanTree()
     decompressed = ht.decompress(compressed)
     assert old_paths==ht.paths
-    # print(decompressed)
     assert string==decompressed
 
 if __name__=="__main__":
