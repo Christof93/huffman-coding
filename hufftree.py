@@ -19,17 +19,23 @@ class HuffmanTree():
         self.paths = {}
         remaining = [((s,p),) for s,p in probabilities.items()]
         while len(remaining)>1:
+            # sort by probability
             remaining = sorted(remaining, key=lambda x:(x[0][1], x[0][0]))
+            # remove first two nodes
             first=remaining.pop(0)
             second=remaining.pop(0)
+            # merge the nodes and sum their probabilities
             new_node = self.merge_nodes(first, second)
+            # add it back into the queue
             remaining.append(new_node)
         self.tree=remaining.pop(0)
         return self.paths
-    
+
     def merge_nodes(self, node_a: Node , node_b: Node):
+        # extend all paths on the left
         for s in node_a[0][0]:
             self.paths[s]="0"+self.paths.get(s, "")
+        # extend all paths on the right
         for s in node_b[0][0]:
             self.paths[s]="1"+self.paths.get(s, "")
         return (tuple(a+b for a,b in zip(node_a[0], node_b[0])), node_a, node_b)
@@ -48,20 +54,28 @@ class HuffmanTree():
         self.canonicalize()
         return "".join(self.paths[s] for s in self.sequence)
     
+    def form_canon_path(self, path, new_length):
+        if path == 0:
+            path = "0"*new_length
+        else:                    
+            path = format(int(path, 2) + 1 , 'b').rjust(
+                len(path), "0" # fill back 0s on the left lost in int conversion
+            ).ljust(
+                new_length, "0" # fill 0s on the right according to bit length required
+            )
+        return path
     
     def canonicalize(self):
+        # sort paths by length and then alphabetically by their leaf node
         sorted_paths = sorted(self.paths.items(), key=lambda x:(len(x[1]), x[0]))
-        canon_path = len(sorted_paths[0][1]) * "0"
-        self.paths[sorted_paths[0][0]] = canon_path
-        for symbol, path in sorted_paths[1:]:
+        # initialize the canonical path as a string of 0s lengths of the shortest path
+        canon_path = 0
+        for symbol, path in sorted_paths:
             # add one to previous code
-            canon_path = format(int(canon_path, 2) + 1 , 'b').rjust(
-                len(canon_path), "0"  # fill back 0s on the left lost in int conversion
-            ).ljust(
-                len(path), "0" # fill 0s on the right according to bit length required
-            )
+            canon_path = self.form_canon_path(canon_path, len(path))
             self.paths[symbol] = canon_path
-
+    
+    
     def get_compressed_tree(self):
         all_symbols, all_paths = map(
             list, 
@@ -90,24 +104,19 @@ class HuffmanTree():
         symbolstack = [chr(int(ct[i:i+7], 2)) for i in range(0, self.num_symbols*7, 7)]
         ct=None
         return bit_nums, symbolstack
-    
+        
     def decompress_tree(self, ct):
+        # get the unique symbols and the code length bins
         bit_nums, symbolstack = self.recover_treeinfo_from_binary(ct)
         self.paths = {}
         path = 0
         for i, nums in enumerate(bit_nums):
             code_len = i+1
             for _ in range(nums):
+                # pop as many symbols as there are of the same code length
                 symbol = symbolstack.pop(0)
-                if path == 0:
-                    path = "0"*code_len
-                else:                    
-                    path = format(int(path, 2) + 1 , 'b').rjust(
-                        len(path), "0" # fill back 0s on the left lost in int conversion
-                    ).ljust(
-                        code_len, "0" # fill 0s on the right according to bit length required
-                    )
-
+                # use the same canonicalization algorithm to recover the tree 
+                path = self.form_canon_path(path, code_len)
                 self.paths[symbol] = path
 
     def decode(self, encoded):
